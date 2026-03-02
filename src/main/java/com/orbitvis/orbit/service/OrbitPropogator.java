@@ -14,12 +14,7 @@ import org.orekit.utils.IERSConventions;
 import org.orekit.propagation.analytical.tle.TLE;
 import org.orekit.propagation.analytical.tle.TLEPropagator;
 import org.orekit.propagation.SpacecraftState;
-
-import java.io.File;
-import java.net.URL;
-
 import javax.management.RuntimeErrorException;
-
 import org.hipparchus.geometry.euclidean.threed.Vector3D;
 import org.orekit.time.AbsoluteDate;
 import org.orekit.utils.Constants;
@@ -30,7 +25,12 @@ import org.orekit.time.TimeScalesFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+import java.io.File;
+import java.net.URL;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 
 @Service
@@ -94,9 +94,40 @@ public class OrbitPropogator {
             log.debug("Could not load orekit from classpath" + e.getMessage());
         }
 
+        File relativePath = new File("../backend/resources/orekit-data");
+        if(relativePath.exists() && relativePath.isDirectory()){
+            log.debug("Found orekit at:", relativePath.getAbsolutePath());
+            return relativePath;
+        }
 
+        File projectPath = new File(System.getProperty("user.dir"), "backend/resources/orekit-data");
+        if (projectPath.exists() && projectPath.isDirectory()) {
+            log.debug("Found Orekit data at project path: {}", projectPath.getAbsolutePath());
+            return projectPath;
+        }
+
+        log.error("Orekit data directory not found in any of the checked locations:");
+        log.error("  - /app/orekit-data (Docker)");
+        log.error("  - classpath:orekit-data");
+        log.error("  - /resources/orekit-data (relative)");
+        log.error("  - /resources/orekit-data", System.getProperty("user.dir"));
+        
         return null;
     }
 
+
+    public List<OrbitPoint> propageGeodetic(TleData tle, Instant start, Instant end, Duration step){
+        if(start.isAfter(end)){
+            throw new IllegalArgumentException("Start cannot be after end time");
+        }
+
+        if(step.isNegative() || step.isZero()){
+            throw new IllegalArgumentException("Step must be positive");
+        }
+
+        List<OrbitPoint> orbitPoints = new ArrayList<>();
+    
+        return orbitPoints;
+    }
 
 }
