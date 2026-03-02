@@ -5,7 +5,7 @@ import lombok.Data;
 @Data
 public class OrbitPoint{
     private double time;
-    private double lan;
+    private double lat;
     private double lon;
     private double alt;
 }
