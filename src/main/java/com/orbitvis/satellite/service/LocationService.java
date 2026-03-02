@@ -1,4 +1,4 @@
-package com.orbitvis.service;
+package com.orbitvis.satellite.service;
 
 import org.springframework.stereotype.Service;
 import com.orbitvis.satellite.domain.Location;
