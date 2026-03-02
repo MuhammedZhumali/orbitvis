@@ -13,7 +13,7 @@ import java.util.UUID;
 public class SatelliteResponse {
     private UUID satelliteId;
     private String name;
-    private List<GeoPointDTO> polygon;
+    private List<GeoPoint> polygon;
     private double latitude;
     private double longitude;
 }
