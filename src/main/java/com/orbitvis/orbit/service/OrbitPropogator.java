@@ -260,4 +260,111 @@ public class OrbitPropogator {
         return orbitPoints;
     }
 
+    public List<CartesianPoint> propogate(TleData tle, Instant start, Instant end, Duration step){
+        if(start.isAfter(end)){
+            throw new IllegalArgumentException("start can not be after end");
+        }
+        if(step.isNegative() || step.isZero()){
+            throw new IllegalArgumentException("Step must be positive");
+        }
+
+        List<CartesianPoint> result = new ArrayList<>();
+
+        try{
+            TLE tleObj = new TLE(tle.getLine1(), tle.getLine2());
+            TLEPropagator propogator = TLEPropagator.selectExtrapolator(tleObj);
+
+            var utc = TimeScalesFactory.getUTC();
+
+            AbsoluteDate startDate = new AbsoluteDate(Date.from(start), utc);
+            AbsoluteDate endDate = new AbsoluteDate(Date.from(end), utc);
+
+            double stepSeconds = step.getSeconds();
+
+            Frame frame = FramesFactory.getEME2000();
+
+            AbsoluteDate current = startDate;
+
+            while(!current.isAfter(endDate)){
+                SpacecraftState state = propogator.propagate(current);
+
+                PVCoordinates pv = propogator.getPVCoordinates(current);
+
+                Vector3D pos = pv.getPosition();
+
+                CartesianPoint point = new CartesianPoint();
+                point.setX(pos.getX());
+                point.setY(pos.getY());
+                point.setZ(pos.getZ());
+
+                long epochSeconds = current.toDate(utc).toInstant().getEpochSecond();
+                point.setTime(epochSeconds);
+
+                result.add(point);
+
+                current = current.shiftedBy(stepSeconds);
+            }
+        }catch (Exception e) {
+            log.error("Failed to propagate Cartesian orbit", e);
+            throw new RuntimeException("Failed to propagate Cartesian orbit: " + e.getMessage(), e);
+        }
+        return result;
+    }
+
+    public List<CartesianPoint> propogateToECRF(TleData tle, Instant start, Instant end, Duration step){
+        if(start.isAfter(start)){
+            throw new IllegalArgumentException("Start can not be after end");
+        }
+        if(step.isNegative() || step.isZero()){
+            throw new IllegalArgumentException("Step must be positive");
+        }
+
+        List<CartesianPoint> result = new ArrayList<>();
+
+        try{
+            TLE tleObj = new TLE(tle.getLine1(), tle.getLine2());
+            TLEPropagator propogator = TLEPropagator.selectExtrapolator(tleObj);
+
+            var utc = TimeScalesFactory.getUTC();
+
+            AbsoluteDate startDate = new AbsoluteDate(Date.from(start), utc);
+            AbsoluteDate endDate = new AbsoluteDate(Date.from(end), utc);
+
+            double stepSeconds = step.getSeconds();
+
+            AbsoluteDate current = startDate;
+
+            while(!current.isAfter(endDate)){
+                SpacecraftState state = propogator.propagate(current);
+
+                Frame inertial = state.getFrame();
+
+                PVCoordinates pvInertial = state.getPVCoordinates(inertial);
+
+                PVCoordinates pvECRF = inertial.getTransformTo(itrf, current).transformPVCoordinates(pvInertial);
+
+                Vector3D ecrfPos = pvECRF.getPosition();
+
+                CartesianPoint point = new CartesianPoint();
+                point.setX(ecrfPos.getX());
+                point.setY(ecrfPos.getY());
+                point.setZ(ecrfPos.getZ());
+                
+                long epochSeconds = current.toDate(utc).toInstant().getEpochSecond();
+                point.setTime(epochSeconds);
+
+                result.add(point);
+
+                current = current.shiftedBy(stepSeconds);
+            }
+        }catch(Exception e){
+            log.error("Propogator to ECRF did not work", e);
+            throw new RuntimeException("Failed to propogate" + e.getMessage(), e);
+        }
+
+        return result;
+    }
+
+
+    
 }
