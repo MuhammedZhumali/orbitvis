@@ -10,6 +10,7 @@ import org.orekit.data.DataProvidersManager;
 import org.orekit.data.DirectoryCrawler;
 import org.orekit.frames.Frame;
 import org.orekit.frames.FramesFactory;
+import org.orekit.frames.TopocentricFrame;
 import org.orekit.utils.IERSConventions;
 import org.orekit.propagation.analytical.tle.TLE;
 import org.orekit.propagation.analytical.tle.TLEPropagator;
@@ -50,6 +51,16 @@ public class OrbitPropogator {
             Constants.WGS84_EARTH_FLATTENING,
             itrf
         );
+    }
+
+    /** Creates a topocentric frame for pass (rise/set) detection at the given location. */
+    public TopocentricFrame createTopocentricFrame(double latDeg, double lonDeg, double alt) {
+        GeodeticPoint gp = new GeodeticPoint(Math.toRadians(latDeg), Math.toRadians(lonDeg), alt);
+        return new TopocentricFrame(earth, gp, "obs");
+    }
+
+    public Frame getItrf() {
+        return itrf;
     }
 
     private void initializeOrekit(){
