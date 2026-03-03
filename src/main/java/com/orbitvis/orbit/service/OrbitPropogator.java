@@ -312,7 +312,7 @@ public class OrbitPropogator {
     }
 
     public List<CartesianPoint> propagateToECRF(TleData tle, Instant start, Instant end, Duration step){
-        if(start.isAfter(start)){
+        if(start.isAfter(end)){
             throw new IllegalArgumentException("Start can not be after end");
         }
         if(step.isNegative() || step.isZero()){

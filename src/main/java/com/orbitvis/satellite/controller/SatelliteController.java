@@ -1,11 +1,9 @@
 package com.orbitvis.satellite.controller;
 
-import org.springframework.http.HttpStatus;
+import com.orbitvis.satellite.domain.SatelliteDto;
+import com.orbitvis.satellite.service.SatelliteService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import com.orbitvis.satellite.domain.SatelliteDto;
-import com.orbitvis.satellite.repository.SatelliteRepository;
-import com.orbitvis.satellite.service.SatelliteService;
 
 import java.util.List;
 import java.util.UUID;
@@ -26,8 +24,8 @@ public class SatelliteController {
     } 
 
     @GetMapping("/get/{id}")
-    public SatelliteDto findById(@PathVariable UUID id){
-        return service.findById(id);
+    public ResponseEntity<SatelliteDto> findById(@PathVariable UUID id){
+        SatelliteDto dto = service.findById(id);
+        return dto != null ? ResponseEntity.ok(dto) : ResponseEntity.notFound().build();
     }
-
 }
