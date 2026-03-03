@@ -2,9 +2,9 @@ syntax = "proto3";
 package orbit;
 
 option java_multiple_files = true;
-option java_package = "com.orbitvis.proto.orbit";
+option java_package = "com.orbitvis.orbit.proto";
 
-message OrbitRequest{
+message OrbitRequest {
     string line1 = 1;
     string line2 = 2;
     int64 startEpoch = 3;
@@ -12,17 +12,17 @@ message OrbitRequest{
     int64 stepSeconds = 5;
 }
 
-message OrbitPoint{
+message OrbitPoint {
     double time = 1;
     double x = 2;
     double y = 3;
     double z = 4;
 }
 
-message OrbitResponse{
+message OrbitResponse {
     repeated OrbitPoint points = 1;
 }
 
-service Orbit{
-    rpc Propogate(OrbitRequest) returns (OrbitResponse);
+service Orbit {
+    rpc Propagate(OrbitRequest) returns (OrbitResponse);
 }

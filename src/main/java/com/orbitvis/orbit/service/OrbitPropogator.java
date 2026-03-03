@@ -260,7 +260,7 @@ public class OrbitPropogator {
         return orbitPoints;
     }
 
-    public List<CartesianPoint> propogate(TleData tle, Instant start, Instant end, Duration step){
+    public List<CartesianPoint> propagate(TleData tle, Instant start, Instant end, Duration step){
         if(start.isAfter(end)){
             throw new IllegalArgumentException("start can not be after end");
         }
@@ -311,7 +311,7 @@ public class OrbitPropogator {
         return result;
     }
 
-    public List<CartesianPoint> propogateToECRF(TleData tle, Instant start, Instant end, Duration step){
+    public List<CartesianPoint> propagateToECRF(TleData tle, Instant start, Instant end, Duration step){
         if(start.isAfter(start)){
             throw new IllegalArgumentException("Start can not be after end");
         }
