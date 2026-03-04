@@ -36,3 +36,5 @@ application-local.yml
 .env.*
 *.pem
 gradle/wrapper/gradle-wrapper.jar
+
+frontend/node_modules

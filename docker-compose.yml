@@ -24,7 +24,7 @@ services:
       SPRING_DATASOURCE_USERNAME: orbituser
       SPRING_DATASOURCE_PASSWORD: orbit_pass
     healthcheck:
-      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/8080>' || exit 1"]
+      test: ["CMD-SHELL", "timeout 1 bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080' || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 15

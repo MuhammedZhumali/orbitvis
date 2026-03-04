@@ -1,4 +1,4 @@
-package com.orbitsvis.orbit.model;
+package com.orbitvis.orbit;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
