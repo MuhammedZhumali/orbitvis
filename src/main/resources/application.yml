@@ -7,3 +7,6 @@ spring:
       ddl-auto: update
   datasource:
     driver-class-name: org.postgresql.Driver
+  sql:
+    init:
+      mode: always
