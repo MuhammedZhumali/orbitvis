@@ -1,14 +1,13 @@
 package com.orbitvis.pass.controller;
 
 import com.orbitvis.orbit.model.TleData;
-import com.orbitvis.pass.model.PassDto;
-import com.orbitvis.pass.model.PassRequest;
+import com.orbitvis.pass.model.*;
 import com.orbitvis.pass.service.PassService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/passes")
@@ -49,4 +48,12 @@ public class PassController {
         );
         return pass != null ? ResponseEntity.ok(pass) : ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/query")
+    public ResponseEntity<PassQueryResponse> passPrediction(@RequestBody PassQueryRequest request) {
+        List<PassPrediction> passes = service.predict(request);
+        PassQueryResponse response = new PassQueryResponse(passes);
+        return ResponseEntity.ok(response);
+    }
+    
 }

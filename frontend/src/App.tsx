@@ -1,6 +1,15 @@
 import { useState, useEffect } from "react";
 import Globe from "./Globe";
-import { getLocations, getSatellites, propagateOrbit, type LocationDto, type SatelliteDto, type CartesianPoint } from "./api";
+import {
+  getLocations,
+  getSatellites,
+  propagateOrbit,
+  queryPasses,
+  type LocationDto,
+  type SatelliteDto,
+  type CartesianPoint,
+  type PassPrediction,
+} from "./api";
 
 export default function App() {
   const [locations, setLocations] = useState<LocationDto[]>([]);
@@ -8,6 +17,7 @@ export default function App() {
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
   const [selectedSatelliteId, setSelectedSatelliteId] = useState<string>("");
   const [orbitPoints, setOrbitPoints] = useState<CartesianPoint[] | null>(null);
+  const [passes, setPasses] = useState<PassPrediction[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,6 +31,7 @@ export default function App() {
   }, []);
 
   const selectedSatellite = satellites.find((s) => s.satelliteId === selectedSatelliteId);
+  const selectedLocation = locations.find((l) => String(l.id) === selectedLocationId);
 
   const handlePropagate = async () => {
     if (!selectedSatellite?.line1 || !selectedSatellite?.line2) {
@@ -41,6 +52,55 @@ export default function App() {
       setOrbitPoints(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLoadPasses = async () => {
+    if (!selectedSatellite || !selectedLocation) {
+      setError("Choose both location and satellite");
+      return;
+    }
+    const lat = selectedLocation.latitude ?? selectedLocation.lattitude ?? 0;
+    const lon = selectedLocation.longitude;
+    const alt = selectedLocation.altitude ?? 0;
+    const now = new Date();
+    const startTime = now.toISOString();
+    const endTime = new Date(now.getTime() + 24 * 3600 * 1000).toISOString();
+
+    setError(null);
+    setLoading(true);
+    try {
+      const data = await queryPasses({
+        satelliteId: selectedSatellite.satelliteId,
+        site: { lat, lon, altMeters: alt },
+        startTime,
+        endTime,
+        minElevationDeg: 10,
+      });
+      setPasses(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Pass query failed");
+      setPasses([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleShowPass = async (pass: PassPrediction) => {
+    if (!selectedSatellite) return;
+    try {
+      const startEpoch = Math.floor(new Date(pass.aos).getTime() / 1000);
+      const endEpoch = Math.floor(new Date(pass.los).getTime() / 1000);
+      const pts = await propagateOrbit({
+        line1: selectedSatellite.line1,
+        line2: selectedSatellite.line2,
+        startEpoch,
+        endEpoch,
+        stepSeconds: 15,
+      });
+      setOrbitPoints(pts);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Propagation failed");
     }
   };
 
@@ -110,21 +170,38 @@ export default function App() {
           </select>
         </label>
 
-        <button
-          onClick={handlePropagate}
-          disabled={loading || !selectedSatelliteId}
-          style={{
-            padding: "0.6rem 1rem",
-            background: loading ? "var(--muted)" : "var(--accent)",
-            border: "none",
-            borderRadius: 6,
-            color: "var(--bg)",
-            fontWeight: 600,
-            fontSize: "0.9rem",
-          }}
-        >
-          {loading ? "Loading…" : "Show orbit"}
-        </button>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <button
+            onClick={handlePropagate}
+            disabled={loading || !selectedSatelliteId}
+            style={{
+              flex: 1,
+              padding: "0.6rem 1rem",
+              background: loading ? "var(--muted)" : "var(--accent)",
+              border: "none",
+              borderRadius: 6,
+              color: "var(--bg)",
+              fontWeight: 600,
+              fontSize: "0.9rem",
+            }}
+          >
+            {loading ? "Loading…" : "Show orbit"}
+          </button>
+          <button
+            onClick={handleLoadPasses}
+            disabled={loading || !selectedSatelliteId || !selectedLocationId}
+            style={{
+              padding: "0.6rem 1rem",
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              color: "var(--text)",
+              fontSize: "0.85rem",
+            }}
+          >
+            Next passes
+          </button>
+        </div>
 
         {error && (
           <div style={{ padding: "0.5rem", background: "rgba(248,81,73,0.15)", borderRadius: 6, fontSize: "0.85rem", color: "#f85149" }}>
@@ -132,9 +209,49 @@ export default function App() {
           </div>
         )}
 
-        {orbitPoints && (
-          <div style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
-            Orbit: {orbitPoints.length} points
+        {passes.length > 0 && (
+          <div style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
+            <div style={{ marginBottom: "0.3rem", fontWeight: 600 }}>Next passes</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", maxHeight: 220, overflowY: "auto" }}>
+              {passes.map((p, i) => (
+                <div
+                  key={`${p.aos}-${i}`}
+                  style={{
+                    padding: "0.4rem 0.5rem",
+                    borderRadius: 6,
+                    border: "1px solid var(--border)",
+                    background: "rgba(15,23,42,0.7)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.15rem",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem" }}>
+                    <span>AOS: {new Date(p.aos).toLocaleTimeString()}</span>
+                    <span>LOS: {new Date(p.los).toLocaleTimeString()}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", color: "var(--muted)" }}>
+                    <span>Max el: {p.maxElevationDeg.toFixed(1)}°</span>
+                    <span>Dur: {Math.round(p.durationSec)} s</span>
+                  </div>
+                  <button
+                    onClick={() => handleShowPass(p)}
+                    style={{
+                      marginTop: "0.25rem",
+                      alignSelf: "flex-start",
+                      padding: "0.25rem 0.6rem",
+                      fontSize: "0.75rem",
+                      borderRadius: 999,
+                      border: "none",
+                      background: "var(--accent)",
+                      color: "var(--bg)",
+                    }}
+                  >
+                    Show this pass
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </aside>

@@ -26,6 +26,20 @@ export interface CartesianPoint {
   z: number;
 }
 
+export interface PassPrediction {
+  aos: string; // ISO instant
+  tca: string;
+  los: string;
+  maxElevationDeg: number;
+  durationSec: number;
+  azimuthAtAosDeg: number;
+  azimuthAtLosDeg: number;
+}
+
+export interface PassQueryResponse {
+  passes: PassPrediction[];
+}
+
 export async function getLocations(): Promise<LocationDto[]> {
   const r = await fetch(`${API_BASE}/location/getAll`);
   if (!r.ok) throw new Error("Failed to load locations");
@@ -58,4 +72,21 @@ export async function propagateOrbit(request: {
   });
   if (!r.ok) throw new Error("Orbit propagation failed");
   return r.json();
+}
+
+export async function queryPasses(params: {
+  satelliteId: string;
+  site: { lat: number; lon: number; altMeters: number };
+  startTime: string;
+  endTime: string;
+  minElevationDeg: number;
+}): Promise<PassPrediction[]> {
+  const r = await fetch(`${API_BASE}/passes/query`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!r.ok) throw new Error("Pass query failed");
+  const data: PassQueryResponse = await r.json();
+  return data.passes ?? [];
 }
