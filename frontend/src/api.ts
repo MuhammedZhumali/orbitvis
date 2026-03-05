@@ -5,7 +5,6 @@ export interface LocationDto {
   name: string;
   longitude: number;
   latitude?: number;
-  lattitude?: number; // backend typo
   altitude: number;
   polygon?: { latDeg: number; lonDeg: number }[];
 }
@@ -38,6 +37,21 @@ export interface PassPrediction {
 
 export interface PassQueryResponse {
   passes: PassPrediction[];
+}
+
+/** Realtime SSE state (ECEF position + optional site-relative view). */
+export interface RealtimeStateDto {
+  t: string; // ISO instant
+  latDeg: number;
+  lonDeg: number;
+  altMeters: number;
+  ecefX: number;
+  ecefY: number;
+  ecefZ: number;
+  azimuthDeg: number;
+  elevtionDeg: number;
+  rangeKm: number;
+  inView: boolean;
 }
 
 export async function getLocations(): Promise<LocationDto[]> {
@@ -89,4 +103,36 @@ export async function queryPasses(params: {
   if (!r.ok) throw new Error("Pass query failed");
   const data: PassQueryResponse = await r.json();
   return data.passes ?? [];
+}
+
+export function openRealtimeStream(params: {
+  satelliteId: string;
+  siteLat?: number;
+  siteLon?: number;
+  siteAlt?: number;
+  rateHz?: number;
+  onState: (s: RealtimeStateDto) => void;
+  onError?: (e: unknown) => void;
+}): () => void {
+  const url = new URL("/api/realtime/stream", window.location.origin);
+  url.searchParams.set("satelliteId", params.satelliteId);
+  if (params.siteLat != null && params.siteLon != null) {
+    url.searchParams.set("siteLat", String(params.siteLat));
+    url.searchParams.set("siteLon", String(params.siteLon));
+    url.searchParams.set("siteAlt", String(params.siteAlt ?? 0));
+  }
+  url.searchParams.set("rateHz", String(params.rateHz ?? 1));
+
+  const es = new EventSource(url.toString());
+
+  es.addEventListener("state", (ev: MessageEvent) => {
+    params.onState(JSON.parse(ev.data));
+  });
+
+  es.onerror = (e) => {
+    params.onError?.(e);
+    es.close();
+  };
+
+  return () => es.close();
 }

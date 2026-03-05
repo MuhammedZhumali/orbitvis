@@ -11,7 +11,7 @@ public class LocationDto {
     private Long id;
     private String name;
     private double longitude;
-    private double lattitude;
+    private double latitude;
     private double altitude;
     private List<GeoPoint> polygon;
 }

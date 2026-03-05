@@ -1,14 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Globe from "./Globe";
 import {
   getLocations,
   getSatellites,
   propagateOrbit,
   queryPasses,
+  openRealtimeStream,
   type LocationDto,
   type SatelliteDto,
   type CartesianPoint,
   type PassPrediction,
+  type RealtimeStateDto,
 } from "./api";
 
 export default function App() {
@@ -21,6 +23,18 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [live, setLive] = useState(false);
+  const [lastRealtime, setLastRealtime] = useState<RealtimeStateDto | null>(null);
+  const [followCamera, setFollowCamera] = useState(true);
+  const [trailSeconds, setTrailSeconds] = useState(60);
+  const [trailPoints, setTrailPoints] = useState<CartesianPoint[]>([]);
+  const liveCloseRef = useRef<(() => void) | null>(null);
+  const trailSecondsRef = useRef(trailSeconds);
+  trailSecondsRef.current = trailSeconds;
+
+  const selectedSatellite = satellites.find((s) => s.satelliteId === selectedSatelliteId);
+  const selectedLocation = locations.find((l) => String(l.id) === selectedLocationId);
+
   useEffect(() => {
     getLocations()
       .then(setLocations)
@@ -30,8 +44,55 @@ export default function App() {
       .catch((e) => setError(e.message));
   }, []);
 
-  const selectedSatellite = satellites.find((s) => s.satelliteId === selectedSatelliteId);
-  const selectedLocation = locations.find((l) => String(l.id) === selectedLocationId);
+  useEffect(() => {
+    if (!live || !selectedSatelliteId) return;
+    const close = openRealtimeStream({
+      satelliteId: selectedSatelliteId,
+      siteLat: selectedLocation?.latitude,
+      siteLon: selectedLocation?.longitude,
+      siteAlt: selectedLocation?.altitude ?? 0,
+      rateHz: 1,
+      onState(s: RealtimeStateDto) {
+        setLastRealtime(s);
+        setTrailPoints((prev) => {
+          const pt: CartesianPoint = {
+            time: new Date(s.t).getTime() / 1000,
+            x: s.ecefX,
+            y: s.ecefY,
+            z: s.ecefZ,
+          };
+          const next = [...prev, pt];
+          const cutoff = (new Date(s.t).getTime() / 1000) - trailSecondsRef.current;
+          return next.filter((p) => p.time >= cutoff);
+        });
+      },
+      onError(e) {
+        setError(e instanceof Error ? e.message : "Realtime stream error");
+        setLive(false);
+      },
+    });
+    liveCloseRef.current = close;
+    return () => {
+      close();
+      liveCloseRef.current = null;
+    };
+  }, [live, selectedSatelliteId, selectedLocation?.latitude, selectedLocation?.longitude, selectedLocation?.altitude]);
+
+  const handleToggleLive = () => {
+    if (live) {
+      liveCloseRef.current?.();
+      setLive(false);
+      setLastRealtime(null);
+      setTrailPoints([]);
+    } else {
+      if (!selectedSatelliteId) {
+        setError("Choose a satellite for Live");
+        return;
+      }
+      setError(null);
+      setLive(true);
+    }
+  };
 
   const handlePropagate = async () => {
     if (!selectedSatellite?.line1 || !selectedSatellite?.line2) {
@@ -60,7 +121,7 @@ export default function App() {
       setError("Choose both location and satellite");
       return;
     }
-    const lat = selectedLocation.latitude ?? selectedLocation.lattitude ?? 0;
+    const lat = selectedLocation.latitude ?? 0;
     const lon = selectedLocation.longitude;
     const alt = selectedLocation.altitude ?? 0;
     const now = new Date();
@@ -173,7 +234,7 @@ export default function App() {
         <div style={{ display: "flex", gap: "0.5rem" }}>
           <button
             onClick={handlePropagate}
-            disabled={loading || !selectedSatelliteId}
+            disabled={loading || !selectedSatelliteId || live}
             style={{
               flex: 1,
               padding: "0.6rem 1rem",
@@ -189,7 +250,7 @@ export default function App() {
           </button>
           <button
             onClick={handleLoadPasses}
-            disabled={loading || !selectedSatelliteId || !selectedLocationId}
+            disabled={loading || !selectedSatelliteId || !selectedLocationId || live}
             style={{
               padding: "0.6rem 1rem",
               background: "var(--surface)",
@@ -202,6 +263,70 @@ export default function App() {
             Next passes
           </button>
         </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+          <button
+            onClick={handleToggleLive}
+            disabled={!selectedSatelliteId}
+            style={{
+              padding: "0.6rem 1rem",
+              background: live ? "#22c55e" : "var(--surface)",
+              border: live ? "none" : "1px solid var(--border)",
+              borderRadius: 6,
+              color: live ? "#fff" : "var(--text)",
+              fontWeight: 600,
+              fontSize: "0.9rem",
+            }}
+          >
+            {live ? "Live ON" : "Live"}
+          </button>
+          {live && (
+            <span
+              style={{
+                padding: "0.25rem 0.5rem",
+                borderRadius: 4,
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                background: lastRealtime?.inView ? "rgba(34, 197, 94, 0.3)" : "var(--surface)",
+                color: lastRealtime?.inView ? "#4ade80" : "var(--muted)",
+                border: lastRealtime?.inView ? "1px solid #22c55e" : "1px solid var(--border)",
+              }}
+            >
+              {lastRealtime?.inView ? "IN VIEW" : "—"}
+            </span>
+          )}
+        </div>
+
+        {live && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", fontSize: "0.85rem" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={followCamera}
+                onChange={(e) => setFollowCamera(e.target.checked)}
+              />
+              Follow camera
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              Trail (sec):
+              <input
+                type="number"
+                min={10}
+                max={300}
+                value={trailSeconds}
+                onChange={(e) => setTrailSeconds(Math.max(10, Math.min(300, Number(e.target.value) || 60)))}
+                style={{
+                  width: 56,
+                  padding: "0.25rem 0.4rem",
+                  background: "var(--bg)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 4,
+                  color: "var(--text)",
+                }}
+              />
+            </label>
+          </div>
+        )}
 
         {error && (
           <div style={{ padding: "0.5rem", background: "rgba(248,81,73,0.15)", borderRadius: 6, fontSize: "0.85rem", color: "#f85149" }}>
@@ -257,7 +382,13 @@ export default function App() {
       </aside>
 
       <main style={{ flex: 1, position: "relative", minWidth: 0 }}>
-        <Globe orbitPoints={orbitPoints} />
+        <Globe
+          orbitPoints={live ? null : orbitPoints}
+          realtimePosition={lastRealtime ? { time: new Date(lastRealtime.t).getTime() / 1000, x: lastRealtime.ecefX, y: lastRealtime.ecefY, z: lastRealtime.ecefZ } : null}
+          trailPoints={trailPoints}
+          followCamera={followCamera}
+          inView={lastRealtime?.inView ?? false}
+        />
       </main>
     </div>
   );
