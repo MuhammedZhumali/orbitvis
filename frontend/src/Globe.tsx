@@ -53,7 +53,7 @@ export default function Globe({
     };
   }, [onViewerReady]);
 
-  // Static orbit polyline (when not in live mode)
+  // Static orbit polyline (when not in live mode), without auto-zoom
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer) return;
@@ -72,7 +72,6 @@ export default function Globe({
           arcType: Cesium.ArcType.NONE,
         },
       });
-      viewer.zoomTo(viewer.entities);
     }
   }, [orbitPoints]);
 

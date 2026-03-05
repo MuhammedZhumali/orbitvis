@@ -25,7 +25,7 @@ export default function App() {
 
   const [live, setLive] = useState(false);
   const [lastRealtime, setLastRealtime] = useState<RealtimeStateDto | null>(null);
-  const [followCamera, setFollowCamera] = useState(true);
+  const [followCamera, setFollowCamera] = useState(false);
   const [trailSeconds, setTrailSeconds] = useState(60);
   const [trailPoints, setTrailPoints] = useState<CartesianPoint[]>([]);
   const liveCloseRef = useRef<(() => void) | null>(null);
