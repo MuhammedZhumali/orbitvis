@@ -3,6 +3,7 @@ server:
 
 spring:
   jpa:
+    defer-datasource-initialization: true
     hibernate:
       ddl-auto: update
   datasource:

@@ -5,17 +5,19 @@ services:
       POSTGRES_USER: orbituser
       POSTGRES_PASSWORD: orbit_pass
       POSTGRES_DB: orbitdb
-    ports: ["5432:5432"]
+    volumes:
+      - postgis-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U orbituser -d orbitdb"]
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 5s
+    networks:
+      - app-network
 
   backend:
     build: .
-    ports: ["8080:8080"]
     depends_on:
       postgis:
         condition: service_healthy
@@ -23,9 +25,24 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgis:5432/orbitdb
       SPRING_DATASOURCE_USERNAME: orbituser
       SPRING_DATASOURCE_PASSWORD: orbit_pass
-    healthcheck:
-      test: ["CMD-SHELL", "timeout 1 bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080' || exit 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 15
-      start_period: 30s
+    networks:
+      - app-network
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+
+volumes:
+  postgis-data:
+
