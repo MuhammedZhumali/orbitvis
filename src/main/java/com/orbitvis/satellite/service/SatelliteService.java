@@ -26,6 +26,16 @@ public class SatelliteService {
                 .orElse(null);
     }
 
+    public void add(SatelliteDto dto){
+        var satellite = new Satellite();
+        satellite.setLine1(dto.getLine1());
+        satellite.setLine2(dto.getLine2());
+        satellite.setMaxNadirOffAngle(dto.getMaxNadirOffAngle());
+        satellite.setMinSunAngle(dto.getMinSunAngle());
+        satellite.setMaxRollAngle(dto.getMaxRollAngle());
+        satRepo.save(satellite);
+    }
+
     private SatelliteDto toDto(Satellite s) {
         return new SatelliteDto(
                 s.getSatelliteId(),

@@ -27,4 +27,11 @@ public class LocationController {
         LocationDto dto = locationService.findById(id);
         return dto != null ? ResponseEntity.ok(dto) : ResponseEntity.notFound().build();
     }
+
+    @PostMapping("/add")
+    public ResponseEntity<Void> add(@RequestBody LocationDto dto){
+        locationService.add(dto);
+        return ResponseEntity.ok().build();
+    }
+
 }

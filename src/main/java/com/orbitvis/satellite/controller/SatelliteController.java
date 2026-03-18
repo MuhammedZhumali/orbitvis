@@ -28,4 +28,10 @@ public class SatelliteController {
         SatelliteDto dto = service.findById(id);
         return dto != null ? ResponseEntity.ok(dto) : ResponseEntity.notFound().build();
     }
+
+    @PostMapping("/add")
+    public ResponseEntity<Void> add(@RequestBody SatelliteDto dto){
+        service.add(dto);
+        return ResponseEntity.ok().build();
+    }
 }

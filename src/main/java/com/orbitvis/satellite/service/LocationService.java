@@ -27,6 +27,15 @@ public class LocationService {
         return repo.findById(id).map(this::toDto).orElse(null);
     }
 
+    public void add(LocationDto dto){
+        var location = new Location();
+        location.setName(dto.getName());
+        location.setLongitude(dto.getLongitude());
+        location.setLatitude(dto.getLatitude());
+        location.setAltitude(dto.getAltitude());
+        repo.save(location);
+    }
+
     private LocationDto toDto(Location l){
         var polygon = l.getPolygon();
         return new LocationDto(
