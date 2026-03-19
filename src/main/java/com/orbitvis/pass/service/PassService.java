@@ -224,7 +224,6 @@ public class PassService {
             AbsoluteDate tMax = window.aos;
             double stepSec = 10.0;
             AbsoluteDate t = window.aos;
-
             while (t.isBeforeOrEqualTo(window.los)) {
                 PVCoordinates pv = propagator.getPVCoordinates(t, orbitPropagator.getItrf());
                 double elevRad = topo.getElevation(pv.getPosition(), orbitPropagator.getItrf(), t);
