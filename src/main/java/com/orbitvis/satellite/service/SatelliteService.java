@@ -36,6 +36,22 @@ public class SatelliteService {
         satRepo.save(satellite);
     }
 
+    public boolean update(UUID id, SatelliteDto dto){
+        return satRepo.findById(id).map(satellite -> {
+            satellite.setLine1(dto.getLine1());
+            satellite.setLine2(dto.getLine2());
+            satellite.setMaxNadirOffAngle(dto.getMaxNadirOffAngle());
+            satellite.setMinSunAngle(dto.getMinSunAngle());
+            satellite.setMaxRollAngle(dto.getMaxRollAngle());
+            satRepo.save(satellite);
+            return true;
+        }).orElse(false);
+    }
+
+    public void delete(UUID id){
+        satRepo.deleteById(id);
+    }
+
     private SatelliteDto toDto(Satellite s) {
         return new SatelliteDto(
                 s.getSatelliteId(),

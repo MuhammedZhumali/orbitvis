@@ -34,4 +34,15 @@ public class SatelliteController {
         service.add(dto);
         return ResponseEntity.ok().build();
     }
+
+    @PutMapping("/update/{id}")
+    public ResponseEntity<Void> update(@PathVariable UUID id, @RequestBody SatelliteDto dto){
+        boolean updated = service.update(id, dto);
+        return updated ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
+    }
+
+    @DeleteMapping("/delete/{id}")
+    public void delete(@PathVariable UUID id){
+        service.delete(id);
+    }
 }
