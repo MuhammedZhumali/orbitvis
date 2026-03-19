@@ -33,6 +33,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.function.Consumer;
 
 
 @Service
@@ -374,6 +375,55 @@ public class OrbitPropogator {
         }
 
         return result;
+    }
+
+    public void streamPropagateToECRF(
+            TleData tle,
+            Instant start,
+            Instant end,
+            Duration step,
+            Consumer<CartesianPoint> pointConsumer
+    ){
+        if(start.isAfter(end)){
+            throw new IllegalArgumentException("Start can not be after end");
+        }
+        if(step.isNegative() || step.isZero()){
+            throw new IllegalArgumentException("Step must be positive");
+        }
+        if(pointConsumer == null){
+            throw new IllegalArgumentException("pointConsumer must not be null");
+        }
+
+        try{
+            TLE tleObj = new TLE(tle.getLine1(), tle.getLine2());
+            TLEPropagator propogator = TLEPropagator.selectExtrapolator(tleObj);
+            var utc = TimeScalesFactory.getUTC();
+
+            AbsoluteDate startDate = new AbsoluteDate(Date.from(start), utc);
+            AbsoluteDate endDate = new AbsoluteDate(Date.from(end), utc);
+            double stepSeconds = step.getSeconds();
+            AbsoluteDate current = startDate;
+
+            while(!current.isAfter(endDate)){
+                SpacecraftState state = propogator.propagate(current);
+                Frame inertial = state.getFrame();
+                PVCoordinates pvInertial = state.getPVCoordinates(inertial);
+                PVCoordinates pvECRF = inertial.getTransformTo(itrf, current).transformPVCoordinates(pvInertial);
+
+                Vector3D ecrfPos = pvECRF.getPosition();
+                CartesianPoint point = new CartesianPoint();
+                point.setX(ecrfPos.getX());
+                point.setY(ecrfPos.getY());
+                point.setZ(ecrfPos.getZ());
+                point.setTime(current.toDate(utc).toInstant().getEpochSecond());
+
+                pointConsumer.accept(point);
+                current = current.shiftedBy(stepSeconds);
+            }
+        }catch(Exception e){
+            log.error("Streaming propagation to ECRF failed", e);
+            throw new RuntimeException("Failed to stream propagate: " + e.getMessage(), e);
+        }
     }
 
 

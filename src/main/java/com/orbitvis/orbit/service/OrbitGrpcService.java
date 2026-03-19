@@ -14,10 +14,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import io.grpc.Context;
+
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 
 @Service
 public class OrbitGrpcService extends OrbitGrpc.OrbitImplBase {
@@ -202,8 +205,10 @@ public class OrbitGrpcService extends OrbitGrpc.OrbitImplBase {
             stepSec = request.getStepSeconds() > 0 ? request.getStepSeconds() : 60;
             Duration step = Duration.ofSeconds(stepSec);
             log.debug("Step: {} seconds", stepSec);
-            List<CartesianPoint> orbitPoints = propagator.propagateToECRF(tle, start, end, step);
-            for(CartesianPoint p : orbitPoints){
+            propagator.streamPropagateToECRF(tle, start, end, step, p->{
+                if(Context.current().isCancelled()){
+                    throw new CancellationException("Client cancelled stream");
+                }
                 OrbitPoint msg = OrbitPoint.newBuilder()
                 .setTime(p.getTime())
                 .setX(p.getX())
@@ -211,10 +216,12 @@ public class OrbitGrpcService extends OrbitGrpc.OrbitImplBase {
                 .setZ(p.getZ())
                 .build();
                 responseObserver.onNext(msg);
-            }
+            });
             responseObserver.onCompleted();
-       }catch(Exception e){
-        responseObserver.onError(e);
-       }
+        }catch(CancellationException e){
+            log.debug("Orbit stream cancelled by client");
+        }catch(Exception e){
+            responseObserver.onError(e);
+        }
     }
 }
