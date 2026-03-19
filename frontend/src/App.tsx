@@ -3,7 +3,7 @@ import Globe from "./Globe";
 import {
   getLocations,
   getSatellites,
-  propagateOrbit,
+  propagateOrbitStream,
   queryPasses,
   openRealtimeStream,
   type LocationDto,
@@ -29,6 +29,7 @@ export default function App() {
   const [trailSeconds, setTrailSeconds] = useState(60);
   const [trailPoints, setTrailPoints] = useState<CartesianPoint[]>([]);
   const liveCloseRef = useRef<(() => void) | null>(null);
+  const orbitAbortRef = useRef<AbortController | null>(null);
   const trailSecondsRef = useRef(trailSeconds);
   trailSecondsRef.current = trailSeconds;
 
@@ -99,19 +100,32 @@ export default function App() {
       setError("Choose a satellite with TLE data");
       return;
     }
+    orbitAbortRef.current?.abort();
+    const ac = new AbortController();
+    orbitAbortRef.current = ac;
     setError(null);
     setLoading(true);
+    setOrbitPoints([]);
     try {
-      const points = await propagateOrbit({
-        line1: selectedSatellite.line1,
-        line2: selectedSatellite.line2,
-        stepSeconds: 60,
-      });
-      setOrbitPoints(points);
+      await propagateOrbitStream(
+        {
+          line1: selectedSatellite.line1,
+          line2: selectedSatellite.line2,
+          stepSeconds: 60,
+        },
+        {
+          signal: ac.signal,
+          onPoint(p) {
+            setOrbitPoints((prev) => [...(prev ?? []), p]);
+          },
+        }
+      );
     } catch (e) {
+      if (ac.signal.aborted) return;
       setError(e instanceof Error ? e.message : "Propagation failed");
       setOrbitPoints(null);
     } finally {
+      if (orbitAbortRef.current === ac) orbitAbortRef.current = null;
       setLoading(false);
     }
   };
@@ -149,19 +163,34 @@ export default function App() {
 
   const handleShowPass = async (pass: PassPrediction) => {
     if (!selectedSatellite) return;
+    orbitAbortRef.current?.abort();
+    const ac = new AbortController();
+    orbitAbortRef.current = ac;
+    setError(null);
+    setOrbitPoints([]);
     try {
       const startEpoch = Math.floor(new Date(pass.aos).getTime() / 1000);
       const endEpoch = Math.floor(new Date(pass.los).getTime() / 1000);
-      const pts = await propagateOrbit({
-        line1: selectedSatellite.line1,
-        line2: selectedSatellite.line2,
-        startEpoch,
-        endEpoch,
-        stepSeconds: 15,
-      });
-      setOrbitPoints(pts);
+      await propagateOrbitStream(
+        {
+          line1: selectedSatellite.line1,
+          line2: selectedSatellite.line2,
+          startEpoch,
+          endEpoch,
+          stepSeconds: 15,
+        },
+        {
+          signal: ac.signal,
+          onPoint(p) {
+            setOrbitPoints((prev) => [...(prev ?? []), p]);
+          },
+        }
+      );
     } catch (e) {
+      if (ac.signal.aborted) return;
       setError(e instanceof Error ? e.message : "Propagation failed");
+    } finally {
+      if (orbitAbortRef.current === ac) orbitAbortRef.current = null;
     }
   };
 

@@ -66,6 +66,21 @@ export async function getSatellites(): Promise<SatelliteDto[]> {
   return r.json();
 }
 
+const ORBIT_BODY = (request: {
+  line1: string;
+  line2: string;
+  startEpoch?: number;
+  endEpoch?: number;
+  stepSeconds?: number;
+}) =>
+  JSON.stringify({
+    line1: request.line1,
+    line2: request.line2,
+    startEpoch: request.startEpoch ?? -1,
+    endEpoch: request.endEpoch ?? -1,
+    stepSeconds: request.stepSeconds ?? 60,
+  });
+
 export async function propagateOrbit(request: {
   line1: string;
   line2: string;
@@ -76,16 +91,97 @@ export async function propagateOrbit(request: {
   const r = await fetch(`${API_BASE}/orbit/propagate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      line1: request.line1,
-      line2: request.line2,
-      startEpoch: request.startEpoch ?? -1,
-      endEpoch: request.endEpoch ?? -1,
-      stepSeconds: request.stepSeconds ?? 60,
-    }),
+    body: ORBIT_BODY(request),
   });
   if (!r.ok) throw new Error("Orbit propagation failed");
   return r.json();
+}
+
+/** Parse buffered SSE text into complete events; returns leftover partial text. */
+function consumeSseEvents(
+  buffer: string,
+  onEvent: (eventName: string, data: string) => void
+): string {
+  const sep = /\r?\n\r?\n/;
+  let rest = buffer;
+  for (;;) {
+    const m = sep.exec(rest);
+    if (!m || m.index === undefined) break;
+    const block = rest.slice(0, m.index);
+    rest = rest.slice(m.index + m[0].length);
+    let eventName = "message";
+    const dataLines: string[] = [];
+    for (const line of block.split(/\r?\n/)) {
+      if (line.startsWith("event:")) eventName = line.slice(6).trim();
+      else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+    }
+    const data = dataLines.join("\n");
+    onEvent(eventName, data);
+  }
+  return rest;
+}
+
+/**
+ * Stream orbit points via POST + SSE (event `point` = JSON CartesianPoint, then `done`).
+ */
+export async function propagateOrbitStream(
+  request: {
+    line1: string;
+    line2: string;
+    startEpoch?: number;
+    endEpoch?: number;
+    stepSeconds?: number;
+  },
+  opts: {
+    onPoint: (p: CartesianPoint) => void;
+    signal?: AbortSignal;
+    onError?: (e: unknown) => void;
+  }
+): Promise<void> {
+  const r = await fetch(`${API_BASE}/orbit/propagate/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: ORBIT_BODY(request),
+    signal: opts.signal,
+  });
+  if (!r.ok) {
+    const err = new Error(`Orbit stream failed: ${r.status}`);
+    opts.onError?.(err);
+    throw err;
+  }
+  const reader = r.body?.getReader();
+  if (!reader) {
+    const err = new Error("No response body");
+    opts.onError?.(err);
+    throw err;
+  }
+  const decoder = new TextDecoder();
+  let buf = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      buf = consumeSseEvents(buf, (eventName, data) => {
+        if (eventName === "point") {
+          try {
+            opts.onPoint(JSON.parse(data) as CartesianPoint);
+          } catch (e) {
+            opts.onError?.(e);
+          }
+        }
+      });
+    }
+  } catch (e) {
+    if (opts.signal?.aborted) return;
+    opts.onError?.(e);
+    throw e;
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 export async function queryPasses(params: {
