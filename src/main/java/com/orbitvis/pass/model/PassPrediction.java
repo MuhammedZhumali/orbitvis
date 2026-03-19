@@ -27,4 +27,6 @@ public class PassPrediction {
     private long durationSec;
     private double azimuthAtAosDeg;
     private double azimuthAtLosDeg;
+
+    private boolean feasible;
 }

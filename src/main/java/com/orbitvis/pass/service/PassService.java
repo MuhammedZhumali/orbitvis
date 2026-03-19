@@ -156,11 +156,24 @@ public class PassService {
         double alt = request.getSite().getAltMeters();
         double minElevRad = Math.toRadians(request.getMinElevationDeg());
 
-        return computePasses(lat, lon, alt, tle, request.getStartTime(), request.getEndTime(), minElevRad);
+        return computePasses(
+                lat,
+                lon,
+                alt,
+                tle,
+                request.getStartTime(),
+                request.getEndTime(),
+                minElevRad,
+                request.getMinElevationDeg()
+        );
     }
 
     private List<PassPrediction> computePasses(double lat, double lon, double altMeters,
-                                               TleData tle, Instant start, Instant end, double minElevRad) {
+                                               TleData tle,
+                                               Instant start,
+                                               Instant end,
+                                               double minElevRad,
+                                               double minElevationDeg) {
         List<PassPrediction> result = new ArrayList<>();
         if (tle == null || tle.getLine1() == null || tle.getLine2() == null || start.isAfter(end)) {
             return result;
@@ -211,6 +224,7 @@ public class PassService {
             AbsoluteDate tMax = window.aos;
             double stepSec = 10.0;
             AbsoluteDate t = window.aos;
+
             while (t.isBeforeOrEqualTo(window.los)) {
                 PVCoordinates pv = propagator.getPVCoordinates(t, orbitPropagator.getItrf());
                 double elevRad = topo.getElevation(pv.getPosition(), orbitPropagator.getItrf(), t);
@@ -226,6 +240,10 @@ public class PassService {
             double maxElevationDeg = Math.toDegrees(maxElev);
             Instant tcaInstant = tMax.toDate(utc).toInstant();
 
+            // MVP feasibility: pass must satisfy requested minimum elevation threshold.
+            // Additional constraints (sun angle, roll, nadir offset) can be added later.
+            boolean isFeasible = maxElevationDeg >= minElevationDeg;
+
             result.add(new PassPrediction(
                     aosInstant,
                     tcaInstant,
@@ -233,7 +251,8 @@ public class PassService {
                     maxElevationDeg,
                     durationSec,
                     azAos,
-                    azLos
+                    azLos,
+                    isFeasible
             ));
         }
 
