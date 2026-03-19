@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Globe from "./Globe";
 import {
   getLocations,
@@ -28,6 +28,7 @@ export default function App() {
   const [followCamera, setFollowCamera] = useState(false);
   const [trailSeconds, setTrailSeconds] = useState(60);
   const [trailPoints, setTrailPoints] = useState<CartesianPoint[]>([]);
+  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
   const liveCloseRef = useRef<(() => void) | null>(null);
   const orbitAbortRef = useRef<AbortController | null>(null);
   const trailSecondsRef = useRef(trailSeconds);
@@ -78,6 +79,11 @@ export default function App() {
       liveCloseRef.current = null;
     };
   }, [live, selectedSatelliteId, selectedLocation?.latitude, selectedLocation?.longitude, selectedLocation?.altitude]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const handleToggleLive = () => {
     if (live) {
@@ -192,6 +198,31 @@ export default function App() {
     } finally {
       if (orbitAbortRef.current === ac) orbitAbortRef.current = null;
     }
+  };
+
+  const passTimeline = useMemo(() => {
+    return passes.map((p) => {
+      const aosSec = Math.floor(new Date(p.aos).getTime() / 1000);
+      const tcaSec = Math.floor(new Date(p.tca).getTime() / 1000);
+      const losSec = Math.floor(new Date(p.los).getTime() / 1000);
+      const total = Math.max(1, losSec - aosSec);
+      const clampedNow = Math.min(Math.max(nowSec, aosSec), losSec);
+      const progress = Math.min(100, Math.max(0, ((clampedNow - aosSec) / total) * 100));
+      const status: "upcoming" | "active" | "past" = nowSec < aosSec ? "upcoming" : nowSec <= losSec ? "active" : "past";
+      return { p, aosSec, tcaSec, losSec, progress, status };
+    });
+  }, [passes, nowSec]);
+
+  const activePass = passTimeline.find((x) => x.status === "active") ?? null;
+  const nextPass = passTimeline.find((x) => x.status === "upcoming") ?? null;
+
+  const handleJumpNearestPass = async () => {
+    const target = activePass?.p ?? nextPass?.p ?? null;
+    if (!target) {
+      setError("No active or upcoming pass in loaded range");
+      return;
+    }
+    await handleShowPass(target);
   };
 
   return (
@@ -365,24 +396,69 @@ export default function App() {
 
         {passes.length > 0 && (
           <div style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
-            <div style={{ marginBottom: "0.3rem", fontWeight: 600 }}>Next passes</div>
+            <div style={{ marginBottom: "0.3rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontWeight: 600 }}>Pass timeline</span>
+              <button
+                onClick={handleJumpNearestPass}
+                style={{
+                  padding: "0.2rem 0.5rem",
+                  fontSize: "0.72rem",
+                  borderRadius: 999,
+                  border: "1px solid var(--border)",
+                  background: "var(--surface)",
+                  color: "var(--text)",
+                }}
+              >
+                Jump nearest pass
+              </button>
+            </div>
+            <div style={{ marginBottom: "0.45rem", fontSize: "0.76rem", color: "var(--muted)" }}>
+              {activePass
+                ? `Active now • ends ${new Date(activePass.p.los).toLocaleTimeString()}`
+                : nextPass
+                  ? `Next • ${new Date(nextPass.p.aos).toLocaleTimeString()} → ${new Date(nextPass.p.los).toLocaleTimeString()}`
+                  : "No upcoming passes in loaded window"}
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", maxHeight: 220, overflowY: "auto" }}>
-              {passes.map((p, i) => (
+              {passTimeline.map(({ p, tcaSec, progress, status }, i) => (
                 <div
                   key={`${p.aos}-${i}`}
                   style={{
                     padding: "0.4rem 0.5rem",
                     borderRadius: 6,
-                    border: "1px solid var(--border)",
+                    border: status === "active" ? "1px solid #22c55e" : "1px solid var(--border)",
                     background: "rgba(15,23,42,0.7)",
                     display: "flex",
                     flexDirection: "column",
-                    gap: "0.15rem",
+                    gap: "0.25rem",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem" }}>
                     <span>AOS: {new Date(p.aos).toLocaleTimeString()}</span>
                     <span>LOS: {new Date(p.los).toLocaleTimeString()}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "var(--muted)" }}>
+                    <span>TCA: {new Date(tcaSec * 1000).toLocaleTimeString()}</span>
+                    <span>
+                      {status === "active" ? "ACTIVE" : status === "upcoming" ? "UPCOMING" : "PAST"}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      width: "100%",
+                      height: 6,
+                      borderRadius: 999,
+                      background: "rgba(148,163,184,0.25)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${progress}%`,
+                        height: "100%",
+                        background: status === "active" ? "#22c55e" : "var(--accent)",
+                      }}
+                    />
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", color: "var(--muted)" }}>
                     <span>Max el: {p.maxElevationDeg.toFixed(1)}°</span>
