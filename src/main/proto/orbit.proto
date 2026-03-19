@@ -25,4 +25,5 @@ message OrbitResponse {
 
 service Orbit {
     rpc Propagate(OrbitRequest) returns (OrbitResponse);
+    rpc PropagateStream(OrbitRequest) returns (stream OrbitPoint);
 }
